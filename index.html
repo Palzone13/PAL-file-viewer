@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PAL Viewer</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0e0e10;
+  --bg2: #18181b;
+  --bg3: #222226;
+  --border: #2e2e33;
+  --text: #e4e4e7;
+  --muted: #71717a;
+  --accent: #7F77DD;
+  --accent2: #5DCAA5;
+  --highlight-bg: #2a2a3a;
+  --highlight-text: #AFA9EC;
+}
+
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+header { border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; align-items: center; gap: 10px; background: var(--bg2); flex-shrink: 0; }
+.logo { font-family: monospace; font-size: 15px; font-weight: 600; color: var(--accent); letter-spacing: 0.05em; white-space: nowrap; }
+.logo span { color: var(--muted); font-weight: 400; }
+header .actions { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+
+.font-controls { display: flex; align-items: center; gap: 2px; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 2px 4px; }
+.font-controls button { background: none; border: none; color: var(--muted); font-size: 15px; padding: 1px 7px; border-radius: 4px; cursor: pointer; line-height: 1.4; }
+.font-controls button:hover { background: var(--border); color: var(--text); }
+.font-controls span { font-size: 11px; color: var(--muted); min-width: 30px; text-align: center; font-family: monospace; }
+
+button { background: var(--bg3); border: 1px solid var(--border); color: var(--text); padding: 5px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; transition: background 0.15s; white-space: nowrap; }
+button:hover { background: #2e2e38; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary:hover { background: #6d66c8; }
+
+.tabs-bar { background: var(--bg2); border-bottom: 1px solid var(--border); display: flex; align-items: stretch; flex-shrink: 0; overflow-x: auto; }
+.tabs-bar::-webkit-scrollbar { height: 3px; }
+.tabs-bar::-webkit-scrollbar-thumb { background: var(--border); }
+.tab { display: flex; align-items: center; gap: 6px; padding: 7px 14px; font-size: 12px; font-family: monospace; color: var(--muted); cursor: pointer; border-right: 1px solid var(--border); white-space: nowrap; border-bottom: 2px solid transparent; transition: color 0.12s, background 0.12s; flex-shrink: 0; }
+.tab:hover { background: var(--bg3); color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); background: var(--bg); }
+.tab.unsaved .tab-name::after { content: ' \2022'; color: var(--accent2); }
+.tab-close { font-size: 11px; color: var(--muted); padding: 1px 3px; border-radius: 3px; line-height: 1; }
+.tab-close:hover { background: var(--border); color: var(--text); }
+.tab-new-btn { padding: 0 14px; font-size: 18px; color: var(--muted); cursor: pointer; border-right: 1px solid var(--border); display: flex; align-items: center; }
+.tab-new-btn:hover { color: var(--accent); background: var(--bg3); }
+
+.main { flex: 1; display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; }
+.pane { display: flex; flex-direction: column; overflow: hidden; }
+.pane-header { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 6px 14px; font-size: 11px; color: var(--muted); font-family: monospace; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); display: inline-block; }
+.dot.green { background: var(--accent2); }
+.editor-area { flex: 1; overflow: hidden; }
+textarea { width: 100%; height: 100%; background: var(--bg); color: var(--text); border: none; border-right: 1px solid var(--border); outline: none; resize: none; font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 14px; line-height: 1.75; padding: 24px; tab-size: 2; }
+
+.viewer-pane { display: flex; flex-direction: column; overflow: hidden; }
+.meta-bar { background: var(--bg3); border-bottom: 1px solid var(--border); padding: 6px 36px; display: flex; gap: 16px; font-size: 11px; color: var(--muted); flex-wrap: wrap; flex-shrink: 0; }
+.meta-bar .mk { color: var(--accent); }
+.viewer-area { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 28px 36px; border-left: 1px solid var(--border); }
+
+.viewer-area h1 { font-size: 26px; font-weight: 600; color: var(--text); margin-bottom: 4px; line-height: 1.3; }
+.viewer-area h2 { font-size: 17px; font-weight: 500; color: var(--muted); margin-top: 2px; margin-bottom: 14px; }
+.viewer-area p { font-size: 15px; line-height: 1.8; color: var(--text); margin-bottom: 10px; }
+.viewer-area ul { margin: 0 0 14px 20px; }
+.viewer-area li { font-size: 15px; line-height: 1.8; color: var(--text); margin-bottom: 3px; }
+.viewer-area hr { border: none; border-top: 1px solid var(--border); margin: 22px 0; }
+.viewer-area strong { color: var(--text); font-weight: 600; }
+.viewer-area em { color: var(--accent2); font-style: italic; }
+.viewer-area code { background: var(--highlight-bg); color: var(--highlight-text); font-family: monospace; font-size: 13px; padding: 1px 6px; border-radius: 4px; }
+.viewer-area a { color: var(--accent); text-decoration: none; }
+.viewer-area a:hover { text-decoration: underline; }
+
+.pal-checkbox-wrap { margin-bottom: 4px; }
+.pal-checkbox { display: flex; align-items: flex-start; gap: 8px; font-size: 15px; line-height: 1.65; }
+.pal-checkbox input[type=checkbox] { margin-top: 4px; accent-color: var(--accent); width: 14px; height: 14px; flex-shrink: 0; cursor: pointer; }
+.pal-checkbox.done label { color: var(--muted); text-decoration: line-through; }
+.pal-checkbox label { cursor: pointer; }
+
+.pal-callout { border-left: 3px solid var(--accent); background: #1a1a2e; border-radius: 0 6px 6px 0; padding: 10px 14px; margin-bottom: 12px; font-size: 14px; line-height: 1.7; }
+.pal-callout.warn { border-left-color: #EF9F27; background: #1e1a0e; }
+.pal-callout.danger { border-left-color: #E24B4A; background: #1e0e0e; }
+.pal-callout.ok { border-left-color: #5DCAA5; background: #0e1e16; }
+.callout-label { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px; color: var(--accent); }
+.pal-callout.warn .callout-label { color: #EF9F27; }
+.pal-callout.danger .callout-label { color: #E24B4A; }
+.pal-callout.ok .callout-label { color: #5DCAA5; }
+
+.pal-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 14px; }
+.pal-table th { background: var(--bg3); color: var(--accent); font-weight: 500; text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.pal-table td { padding: 7px 12px; border-bottom: 1px solid var(--border); color: var(--text); }
+.pal-table tr:last-child td { border-bottom: none; }
+.pal-table tr:hover td { background: var(--bg3); }
+
+.pal-embed { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin-bottom: 14px; }
+.pal-embed-label { background: var(--bg3); font-size: 10px; font-family: monospace; color: var(--muted); padding: 4px 10px; border-bottom: 1px solid var(--border); }
+.pal-embed iframe { width: 100%; border: none; display: block; min-height: 60px; }
+
+.drop-overlay { display: none; position: fixed; inset: 0; background: rgba(127,119,221,0.1); border: 2px dashed var(--accent); z-index: 100; align-items: center; justify-content: center; font-size: 20px; color: var(--accent); letter-spacing: 0.04em; }
+.drop-overlay.active { display: flex; }
+
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 10px; color: var(--muted); font-size: 14px; text-align: center; }
+.empty-state .icon { font-size: 32px; opacity: 0.2; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">.pal <span>viewer</span></div>
+  <div class="font-controls">
+    <button onclick="changeFontSize(-1)">−</button>
+    <span id="fontSizeLabel">14px</span>
+    <button onclick="changeFontSize(1)">+</button>
+  </div>
+  <div class="actions">
+    <button onclick="openFile()">Open .pal</button>
+    <button onclick="newTab()">+ New tab</button>
+    <button class="primary" onclick="saveCurrentTab()">Save .pal</button>
+    <input type="file" id="fileInput" accept=".pal,.txt" style="display:none" onchange="loadFile(event)">
+  </div>
+</header>
+
+<div class="tabs-bar" id="tabsBar">
+  <div class="tab-new-btn" onclick="newTab()" title="New tab">+</div>
+</div>
+
+<div class="drop-overlay" id="dropOverlay">Drop your .pal file here</div>
+
+<div class="main">
+  <div class="pane">
+    <div class="pane-header"><span class="dot"></span> editor</div>
+    <div class="editor-area">
+      <textarea id="editor" spellcheck="false" placeholder="Start writing your .pal file..."></textarea>
+    </div>
+  </div>
+  <div class="viewer-pane pane">
+    <div class="pane-header"><span class="dot green"></span> preview</div>
+    <div id="metaBar" class="meta-bar" style="display:none"></div>
+    <div class="viewer-area" id="viewer">
+      <div class="empty-state"><div class="icon">◻</div><div>Start typing or open a .pal file</div><div style="font-size:12px;opacity:0.6;margin-top:4px">Drag and drop a .pal file anywhere</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const editorEl = document.getElementById('editor');
+const viewerEl = document.getElementById('viewer');
+const metaBarEl = document.getElementById('metaBar');
+const tabsBarEl = document.getElementById('tabsBar');
+
+let fontSize = 14;
+let activeTabId = null;
+let tabCounter = 0;
+const tabs = {};
+
+function changeFontSize(d) {
+  fontSize = Math.max(10, Math.min(26, fontSize + d));
+  editorEl.style.fontSize = fontSize + 'px';
+  document.getElementById('fontSizeLabel').textContent = fontSize + 'px';
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function parseInline(str) {
+  const out = [];
+  const rx = /\*([^*]+)\*|~([^~]+)~|`([^`]+)`|->([^|>]+)\|(\S+)/g;
+  let last = 0, m;
+  while ((m = rx.exec(str)) !== null) {
+    if (m.index > last) out.push({ t: 'text', v: str.slice(last, m.index) });
+    if (m[1] != null) out.push({ t: 'bold', v: m[1] });
+    else if (m[2] != null) out.push({ t: 'italic', v: m[2] });
+    else if (m[3] != null) out.push({ t: 'code', v: m[3] });
+    else if (m[4] != null) out.push({ t: 'link', label: m[4].trim(), url: m[5].trim() });
+    last = m.index + m[0].length;
+  }
+  if (last < str.length) out.push({ t: 'text', v: str.slice(last) });
+  return out;
+}
+
+function ri(nodes) {
+  return nodes.map(n => {
+    if (n.t === 'bold') return `<strong>${esc(n.v)}</strong>`;
+    if (n.t === 'italic') return `<em>${esc(n.v)}</em>`;
+    if (n.t === 'code') return `<code>${esc(n.v)}</code>`;
+    if (n.t === 'link') return `<a href="${esc(n.url)}" target="_blank" rel="noopener">${esc(n.label)}</a>`;
+    return esc(n.v);
+  }).join('');
+}
+
+function parsePAL(src) {
+  const lines = src.split(/\r?\n/);
+  const tokens = [], meta = {};
+  let i = 0;
+  while (i < lines.length) {
+    const l = lines[i].trimEnd();
+    if (l.startsWith('##')) {
+      tokens.push({ type: 'comment' });
+    } else if (l.startsWith('@')) {
+      const m = l.match(/^@([\w-]+):\s*(.*)$/);
+      if (m) { meta[m[1]] = m[2]; tokens.push({ type: 'meta', key: m[1], val: m[2] }); }
+    } else if (l.startsWith('::')) {
+      tokens.push({ type: 'heading', nodes: parseInline(l.slice(2).trim()) });
+    } else if (l.startsWith('---')) {
+      tokens.push({ type: 'subheading', nodes: parseInline(l.slice(3).trim()) });
+    } else if (l.trim() === '===') {
+      tokens.push({ type: 'divider' });
+    } else if (/^\[(x| )\] /i.test(l)) {
+      const checked = l[1].toLowerCase() === 'x';
+      tokens.push({ type: 'checkbox', checked, nodes: parseInline(l.slice(4).trim()) });
+    } else if (l.startsWith('!')) {
+      let kind = 'info', text = '';
+      if (l.startsWith('!danger>')) { kind = 'danger'; text = l.slice(8).trim(); }
+      else if (l.startsWith('!warn>')) { kind = 'warn'; text = l.slice(6).trim(); }
+      else if (l.startsWith('!ok>')) { kind = 'ok'; text = l.slice(4).trim(); }
+      else if (l.startsWith('!>')) { kind = 'info'; text = l.slice(2).trim(); }
+      else { tokens.push({ type: 'paragraph', nodes: parseInline(l) }); i++; continue; }
+      tokens.push({ type: 'callout', kind, nodes: parseInline(text) });
+    } else if (l.startsWith('|') && l.endsWith('|')) {
+      const tlines = [];
+      while (i < lines.length && lines[i].trimEnd().startsWith('|') && lines[i].trimEnd().endsWith('|')) {
+        tlines.push(lines[i].trimEnd()); i++;
+      }
+      tokens.push({ type: 'table', lines: tlines });
+      continue;
+    } else if (l.startsWith("--html'") && l.lastIndexOf("'") > 6) {
+      const end = l.lastIndexOf("'");
+      tokens.push({ type: 'embed', content: l.slice(7, end) });
+    } else if (l.startsWith('- ')) {
+      tokens.push({ type: 'li', nodes: parseInline(l.slice(2).trim()) });
+    } else if (l.trim() === '') {
+      tokens.push({ type: 'blank' });
+    } else {
+      tokens.push({ type: 'paragraph', nodes: parseInline(l) });
+    }
+    i++;
+  }
+  return { meta, tokens };
+}
+
+let embedIdx = 0;
+
+function render(src) {
+  embedIdx = 0;
+  if (!src.trim()) {
+    viewerEl.innerHTML = `<div class="empty-state"><div class="icon">◻</div><div>Start typing or open a .pal file</div><div style="font-size:12px;opacity:0.6;margin-top:4px">Drag and drop a .pal file anywhere</div></div>`;
+    metaBarEl.style.display = 'none';
+    return;
+  }
+
+  const { meta, tokens } = parsePAL(src);
+
+  const metaEntries = Object.entries(meta);
+  if (metaEntries.length) {
+    metaBarEl.style.display = 'flex';
+    metaBarEl.innerHTML = metaEntries.map(([k,v]) => `<span class="mk">@${k}:</span> ${esc(v)}`).join('');
+  } else {
+    metaBarEl.style.display = 'none';
+  }
+
+  let html = '';
+  let inUL = false;
+
+  for (const tok of tokens) {
+    if (tok.type !== 'li' && inUL) { html += '</ul>'; inUL = false; }
+
+    switch (tok.type) {
+      case 'heading':
+        html += `<h1>${ri(tok.nodes)}</h1>`; break;
+      case 'subheading':
+        html += `<h2>${ri(tok.nodes)}</h2>`; break;
+      case 'divider':
+        html += '<hr>'; break;
+      case 'li':
+        if (!inUL) { html += '<ul>'; inUL = true; }
+        html += `<li>${ri(tok.nodes)}</li>`; break;
+      case 'checkbox': {
+        const id = 'cb' + Math.random().toString(36).slice(2,8);
+        const cls = tok.checked ? 'pal-checkbox done' : 'pal-checkbox';
+        html += `<div class="pal-checkbox-wrap"><div class="${cls}"><input type="checkbox" id="${id}"${tok.checked?' checked':''}
+          onchange="this.closest('.pal-checkbox').classList.toggle('done',this.checked)"><label for="${id}">${ri(tok.nodes)}</label></div></div>`;
+        break;
+      }
+      case 'callout': {
+        const labels = { info: 'info', warn: 'warning', danger: 'danger', ok: 'success' };
+        html += `<div class="pal-callout ${tok.kind}"><div class="callout-label">${labels[tok.kind]}</div>${ri(tok.nodes)}</div>`; break;
+      }
+      case 'table': {
+        const rows = tok.lines.map(l => l.slice(1,-1).split('|').map(c => c.trim()));
+        const isSep = r => r.every(c => /^[-: ]+$/.test(c));
+        let t = '<table class="pal-table">';
+        let inBody = false, headDone = false;
+        for (let ri2 = 0; ri2 < rows.length; ri2++) {
+          if (isSep(rows[ri2])) continue;
+          if (!headDone && ri2 + 1 < rows.length && isSep(rows[ri2+1])) {
+            t += '<thead><tr>' + rows[ri2].map(c=>`<th>${esc(c)}</th>`).join('') + '</tr></thead><tbody>';
+            headDone = true; inBody = true;
+          } else {
+            if (!inBody) { t += '<tbody>'; inBody = true; }
+            t += '<tr>' + rows[ri2].map(c=>`<td>${esc(c)}</td>`).join('') + '</tr>';
+          }
+        }
+        if (inBody) t += '</tbody>';
+        t += '</table>';
+        html += t; break;
+      }
+      case 'embed': {
+        const eid = 'emb_' + (embedIdx++);
+        html += `<div class="pal-embed"><div class="pal-embed-label">html embed</div><iframe id="${eid}" sandbox="allow-scripts allow-same-origin" srcdoc="${esc(tok.content)}" style="height:80px" onload="autoH(this)"></iframe></div>`;
+        break;
+      }
+      case 'paragraph':
+        html += `<p>${ri(tok.nodes)}</p>`; break;
+    }
+  }
+  if (inUL) html += '</ul>';
+  viewerEl.innerHTML = html;
+}
+
+function autoH(f) {
+  try { f.style.height = (f.contentDocument.body.scrollHeight + 16) + 'px'; } catch(e) {}
+}
+
+function newTab(name, content) {
+  if (activeTabId && tabs[activeTabId]) {
+    tabs[activeTabId].content = editorEl.value;
+  }
+  const id = 'tab' + (tabCounter++);
+  tabs[id] = { name: name || 'untitled.pal', content: content || '' };
+
+  const el = document.createElement('div');
+  el.className = 'tab';
+  el.dataset.id = id;
+  el.innerHTML = `<span class="tab-name">${esc(tabs[id].name)}</span><span class="tab-close" title="Close">✕</span>`;
+  el.querySelector('.tab-name').onclick = () => switchTab(id);
+  el.querySelector('.tab-close').onclick = (e) => { e.stopPropagation(); closeTab(id); };
+  tabsBarEl.insertBefore(el, tabsBarEl.querySelector('.tab-new-btn'));
+  switchTab(id);
+  return id;
+}
+
+function switchTab(id) {
+  if (activeTabId && tabs[activeTabId]) tabs[activeTabId].content = editorEl.value;
+  activeTabId = id;
+  editorEl.value = tabs[id].content;
+  render(tabs[id].content);
+  tabsBarEl.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.id === id));
+  editorEl.focus();
+}
+
+function closeTab(id) {
+  const ids = Object.keys(tabs);
+  if (ids.length === 1) {
+    tabs[id].content = '';
+    editorEl.value = '';
+    render('');
+    tabsBarEl.querySelector(`.tab[data-id="${id}"] .tab-name`).textContent = 'untitled.pal';
+    return;
+  }
+  const idx = ids.indexOf(id);
+  delete tabs[id];
+  tabsBarEl.querySelector(`.tab[data-id="${id}"]`).remove();
+  if (activeTabId === id) {
+    switchTab(Object.keys(tabs)[Math.max(0, idx - 1)]);
+  }
+}
+
+function openFile() { document.getElementById('fileInput').click(); }
+
+function loadFile(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const id = newTab(file.name, ev.target.result);
+    render(tabs[id].content);
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+function saveCurrentTab() {
+  if (!activeTabId) return;
+  tabs[activeTabId].content = editorEl.value;
+  const blob = new Blob([editorEl.value], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = tabs[activeTabId].name;
+  a.click();
+  tabsBarEl.querySelector(`.tab[data-id="${activeTabId}"]`)?.classList.remove('unsaved');
+}
+
+editorEl.addEventListener('input', () => {
+  if (activeTabId && tabs[activeTabId]) {
+    tabs[activeTabId].content = editorEl.value;
+    tabsBarEl.querySelector(`.tab[data-id="${activeTabId}"]`)?.classList.add('unsaved');
+  }
+  render(editorEl.value);
+});
+
+const dropOverlay = document.getElementById('dropOverlay');
+document.addEventListener('dragover', e => { e.preventDefault(); dropOverlay.classList.add('active'); });
+document.addEventListener('dragleave', e => { if (!e.relatedTarget) dropOverlay.classList.remove('active'); });
+document.addEventListener('drop', e => {
+  e.preventDefault();
+  dropOverlay.classList.remove('active');
+  const file = e.dataTransfer.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => { newTab(file.name, ev.target.result); };
+  reader.readAsText(file);
+});
+
+const DEMO = `## PAL Viewer v2 — feature demo
+@author: Pal
+@date: 2026-04-09
+@version: 2.0
+
+::PAL Format
+---A text format by PAL Labs
+
+===
+
+::Inline Formatting
+This is *bold*, this is ~italic~, and this is \`highlighted\`.
+Check out ->PAL Labs|https://example.com for more info.
+
+===
+
+::Callout Boxes
+!> This is a general info callout.
+!warn> This is a warning. Watch out.
+!danger> This is a danger alert. Be careful!
+!ok> This is a success message.
+
+===
+
+::Checkboxes
+[ ] Build the PAL parser
+[x] Design the format spec
+[ ] Write documentation
+[x] Build the viewer app
+
+===
+
+::Tables
+| Name       | Syntax          | Example              |
+| ---------- | --------------- | -------------------- |
+| Heading    | ::Text          | ::My Title           |
+| Subheading | ---Text         | ---Subtitle          |
+| Bold       | *text*          | *important*          |
+| Italic     | ~text~          | ~emphasis~           |
+| Link       | ->label|url     | ->Site|https://x.com |
+| Callout    | !> / !warn>     | !> note here         |
+| Checkbox   | [ ] / [x]       | [x] done task        |
+
+===
+
+::HTML Embed
+--html'<div style="font-family:sans-serif;padding:12px 16px;background:#1a1a2e;color:#AFA9EC;border-radius:6px;font-size:13px;line-height:1.6">Hello from an <strong style="color:#7F77DD">embedded HTML</strong> snippet inside a .pal file!</div>'
+
+===
+
+::Lists
+- Free-form text, just write naturally
+- *Bold*, ~italic~, and \`highlighted\` inline
+- ->Links|https://example.com work inline too
+- Headings, subheadings, dividers, lists`;
+
+newTab('demo.pal', DEMO);
+</script>
+</body>
+</html>
